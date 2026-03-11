@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,28 @@ export default function ProductsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Ref para o input de arquivo web
+  const webFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Criar input de arquivo para web
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,text/csv,text/plain,.txt';
+      input.style.display = 'none';
+      input.id = 'csv-file-input';
+      document.body.appendChild(input);
+      webFileInputRef.current = input;
+      
+      return () => {
+        if (input.parentNode) {
+          document.body.removeChild(input);
+        }
+      };
+    }
+  }, []);
 
   useEffect(() => {
     loadProducts(1, searchQuery);
