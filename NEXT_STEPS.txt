@@ -1,0 +1,41 @@
+# PRÓXIMOS PASSOS PARA COMPLETAR A IMPLEMENTAÇÃO
+
+## Arquivos que Precisam Ser Criados/Atualizados:
+
+### 1. /app/frontend/app/products.tsx
+- Tela completa de produtos com:
+  * Lista paginada de produtos
+  * Campo de pesquisa
+  * Botão de upload CSV (sobrescreve tudo)
+  * CRUD completo (Create, Update, Delete)
+  * Scroll infinito
+
+### 2. /app/frontend/components/ProductFormModal.tsx  
+- Modal para adicionar/editar produto
+- Campos: code, ean, description
+- Validação de campos
+
+### 3. /app/frontend/components/AddProductModal.tsx
+- Modal simples para cadastro rápido durante contagem
+- Usado quando produto não é encontrado
+
+### 4. Atualizar /app/frontend/app/counting/[id].tsx
+- Adicionar campo de pesquisa no topo
+- Busca automática ao digitar/escanear
+- Campos read-only: code, ean, description
+- Campos editáveis: quantity, lot, expiry_date
+- Modal de cadastro rápido se produto não encontrado
+- Atualizar addCountedItem para incluir ean e description
+
+### 5. Atualizar /app/frontend/components/EditItemModal.tsx
+- Remover edição de code, ean, description
+- Manter apenas quantity, lot, expiry_date editáveis
+
+## Status Atual:
+✅ Backend 100% completo
+✅ API services atualizadas  
+✅ i18n em PT-BR
+✅ Traduções completas
+⏳ Falta implementar 5 arquivos de UI
+
+Tempo estimado: 15-20 minutos

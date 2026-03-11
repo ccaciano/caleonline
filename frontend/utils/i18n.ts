@@ -50,6 +50,12 @@ const resources = {
       confirmDeleteProduct: 'Tem certeza que deseja excluir este produto?',
       productDeleted: 'Produto excluído com sucesso',
       csvFormat: 'Formato CSV: Código Produto, EAN, Descrição',
+      csvWillReplace: 'ATENÇÃO: O upload irá SOBRESCREVER todos os produtos existentes!',
+      searchProducts: 'Pesquisar produtos...',
+      editProduct: 'Editar Produto',
+      updateProduct: 'Atualizar Produto',
+      productUpdated: 'Produto atualizado com sucesso!',
+      loadingMore: 'Carregando mais...',
       
       // Counting Screen
       countingTitle: 'Contagem de Itens',

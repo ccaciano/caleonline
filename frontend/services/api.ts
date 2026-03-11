@@ -146,8 +146,12 @@ export const getExportData = async (inventoryId: string): Promise<ExportData> =>
 };
 
 // Products
-export const getProducts = async (): Promise<Product[]> => {
-  const response = await fetch(`${API_URL}/products`);
+export const getProducts = async (page: number = 1, limit: number = 50, search: string = ''): Promise<any> => {
+  let url = `${API_URL}/products?page=${page}&limit=${limit}`;
+  if (search) {
+    url += `&search=${encodeURIComponent(search)}`;
+  }
+  const response = await fetch(url);
   if (!response.ok) throw new Error('Failed to get products');
   return response.json();
 };
@@ -174,8 +178,23 @@ export const createProduct = async (product: Omit<Product, '_id' | 'created_at'>
   return response.json();
 };
 
-export const uploadProductsCSV = async (csvContent: string): Promise<any> => {
-  const response = await fetch(`${API_URL}/products/upload`, {
+export const updateProduct = async (productId: string, product: Omit<Product, '_id' | 'created_at'>): Promise<Product> => {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(product),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update product');
+  }
+  return response.json();
+};
+
+export const uploadProductsCSV = async (csvContent: string, clearExisting: boolean = true): Promise<any> => {
+  const response = await fetch(`${API_URL}/products/upload?clear_existing=${clearExisting}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
