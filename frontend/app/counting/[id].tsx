@@ -284,53 +284,101 @@ export default function CountingScreen() {
       const fileUri = await generateExcelReport(exportData);
       console.log('Arquivo gerado:', fileUri);
       
-      // Mostrar opções de compartilhamento
-      Alert.alert(
-        t('exportTitle'),
-        t('exportSuccess'),
-        [
-          {
-            text: t('download'),
-            onPress: async () => {
-              try {
-                console.log('Compartilhando arquivo...');
-                await shareExcelFile(fileUri);
-              } catch (error) {
-                console.error('Error sharing file:', error);
-                Alert.alert('Erro', 'Falha ao compartilhar arquivo: ' + (error as Error).message);
-              }
-            },
-          },
-          {
-            text: t('sendEmail'),
-            onPress: async () => {
-              try {
-                const storeConfig = await getStoreConfig();
-                const isAvailable = await MailComposer.isAvailableAsync();
-                
-                if (!isAvailable) {
-                  Alert.alert('Erro', 'E-mail não disponível neste dispositivo');
-                  return;
-                }
+      // Verifica se foi salvo via SAF (Android) - URI começa com content://
+      const savedViaSAF = fileUri.startsWith('content://');
+      
+      if (Platform.OS === 'web' || fileUri === 'web-download') {
+        // Na web, o download já foi feito automaticamente
+        Alert.alert(
+          t('exportTitle'),
+          'Arquivo Excel baixado com sucesso!',
+          [{ text: 'OK' }]
+        );
+      } else if (savedViaSAF) {
+        // No Android com SAF, o arquivo já foi salvo no diretório escolhido
+        Alert.alert(
+          t('exportTitle'),
+          'Arquivo salvo com sucesso no diretório selecionado!',
+          [
+            {
+              text: t('sendEmail'),
+              onPress: async () => {
+                try {
+                  const storeConfig = await getStoreConfig();
+                  const isAvailable = await MailComposer.isAvailableAsync();
+                  
+                  if (!isAvailable) {
+                    Alert.alert('Erro', 'E-mail não disponível neste dispositivo');
+                    return;
+                  }
 
-                await MailComposer.composeAsync({
-                  recipients: storeConfig?.email ? [storeConfig.email] : [],
-                  subject: `Relatório de Inventário - ${exportData.inventory.description}`,
-                  body: `Segue em anexo o relatório de inventário para ${exportData.inventory.description} datado de ${exportData.inventory.date}.`,
-                  attachments: [fileUri],
-                });
-              } catch (error) {
-                console.error('Error sending email:', error);
-                Alert.alert('Erro', 'Falha ao enviar e-mail: ' + (error as Error).message);
-              }
+                  await MailComposer.composeAsync({
+                    recipients: storeConfig?.email ? [storeConfig.email] : [],
+                    subject: `Relatório de Inventário - ${exportData.inventory.description}`,
+                    body: `Segue em anexo o relatório de inventário para ${exportData.inventory.description} datado de ${exportData.inventory.date}.`,
+                    attachments: [fileUri],
+                  });
+                } catch (error) {
+                  console.error('Error sending email:', error);
+                  Alert.alert('Erro', 'Falha ao enviar e-mail: ' + (error as Error).message);
+                }
+              },
             },
-          },
-          {
-            text: 'OK',
-            style: 'cancel',
-          },
-        ]
-      );
+            {
+              text: 'OK',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        // iOS ou fallback - mostrar opções de compartilhamento
+        Alert.alert(
+          t('exportTitle'),
+          t('exportSuccess'),
+          [
+            {
+              text: t('download'),
+              onPress: async () => {
+                try {
+                  console.log('Compartilhando arquivo...');
+                  await shareExcelFile(fileUri);
+                } catch (error) {
+                  console.error('Error sharing file:', error);
+                  Alert.alert('Erro', 'Falha ao compartilhar arquivo: ' + (error as Error).message);
+                }
+              },
+            },
+            {
+              text: t('sendEmail'),
+              onPress: async () => {
+                try {
+                  const storeConfig = await getStoreConfig();
+                  const isAvailable = await MailComposer.isAvailableAsync();
+                  
+                  if (!isAvailable) {
+                    Alert.alert('Erro', 'E-mail não disponível neste dispositivo');
+                    return;
+                  }
+
+                  await MailComposer.composeAsync({
+                    recipients: storeConfig?.email ? [storeConfig.email] : [],
+                    subject: `Relatório de Inventário - ${exportData.inventory.description}`,
+                    body: `Segue em anexo o relatório de inventário para ${exportData.inventory.description} datado de ${exportData.inventory.date}.`,
+                    attachments: [fileUri],
+                  });
+                } catch (error) {
+                  console.error('Error sending email:', error);
+                  Alert.alert('Erro', 'Falha ao enviar e-mail: ' + (error as Error).message);
+                }
+              },
+            },
+            {
+              text: 'OK',
+              style: 'cancel',
+            },
+          ]
+        );
+      }
       
       loadData();
     } catch (error) {
