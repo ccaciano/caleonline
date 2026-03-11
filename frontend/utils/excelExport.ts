@@ -134,13 +134,29 @@ const downloadForNative = async (data: ExportData): Promise<string> => {
   // Generate base64 string
   const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
 
+  // Verificar se o documentDirectory está disponível
+  const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+  if (!baseDir) {
+    throw new Error('Diretório de documentos não disponível');
+  }
+
   // Create file path
-  const fileUri = FileSystem.documentDirectory + fileName;
+  const fileUri = baseDir + fileName;
+
+  console.log('Salvando arquivo em:', fileUri);
 
   // Write file
   await FileSystem.writeAsStringAsync(fileUri, wbout, {
     encoding: FileSystem.EncodingType.Base64,
   });
+
+  // Verificar se o arquivo foi criado
+  const fileInfo = await FileSystem.getInfoAsync(fileUri);
+  console.log('Arquivo criado:', fileInfo);
+  
+  if (!fileInfo.exists) {
+    throw new Error('Falha ao criar arquivo');
+  }
 
   return fileUri;
 };

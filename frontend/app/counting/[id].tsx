@@ -270,11 +270,21 @@ export default function CountingScreen() {
 
     try {
       setLoading(true);
+      
+      // Primeiro fechar o inventário
+      console.log('Fechando inventário...');
       await closeInventory(inventoryId);
       
+      // Obter dados para exportação
+      console.log('Obtendo dados para exportação...');
       const exportData = await getExportData(inventoryId);
-      const fileUri = await generateExcelReport(exportData);
       
+      // Gerar arquivo Excel
+      console.log('Gerando arquivo Excel...');
+      const fileUri = await generateExcelReport(exportData);
+      console.log('Arquivo gerado:', fileUri);
+      
+      // Mostrar opções de compartilhamento
       Alert.alert(
         t('exportTitle'),
         t('exportSuccess'),
@@ -283,9 +293,11 @@ export default function CountingScreen() {
             text: t('download'),
             onPress: async () => {
               try {
+                console.log('Compartilhando arquivo...');
                 await shareExcelFile(fileUri);
               } catch (error) {
                 console.error('Error sharing file:', error);
+                Alert.alert('Erro', 'Falha ao compartilhar arquivo: ' + (error as Error).message);
               }
             },
           },
@@ -309,9 +321,13 @@ export default function CountingScreen() {
                 });
               } catch (error) {
                 console.error('Error sending email:', error);
-                Alert.alert('Erro', 'Falha ao enviar e-mail');
+                Alert.alert('Erro', 'Falha ao enviar e-mail: ' + (error as Error).message);
               }
             },
+          },
+          {
+            text: 'OK',
+            style: 'cancel',
           },
         ]
       );
@@ -319,7 +335,7 @@ export default function CountingScreen() {
       loadData();
     } catch (error) {
       console.error('Error exporting:', error);
-      Alert.alert(t('exportError'));
+      Alert.alert('Erro ao Exportar', (error as Error).message || t('exportError'));
     } finally {
       setLoading(false);
     }
