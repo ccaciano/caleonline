@@ -108,11 +108,36 @@ async def get_store_config():
 # Inventory Endpoints
 @api_router.get("/inventories")
 async def get_inventories():
-    inventories = await db.inventories.find().sort("created_at", -1).to_list(1000)
+    # Use aggregation pipeline to avoid N+1 query problem
+    pipeline = [
+        {
+            "$lookup": {
+                "from": "counted_items",
+                "let": {"inv_id": {"$toString": "$_id"}},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$inventory_id", "$$inv_id"]}}}
+                ],
+                "as": "items"
+            }
+        },
+        {
+            "$addFields": {
+                "item_count": {"$size": "$items"}
+            }
+        },
+        {
+            "$project": {
+                "items": 0
+            }
+        },
+        {
+            "$sort": {"created_at": -1}
+        }
+    ]
+    
+    inventories = await db.inventories.aggregate(pipeline).to_list(1000)
     for inv in inventories:
         serialize_doc(inv)
-        # Count items for each inventory
-        inv["item_count"] = await db.counted_items.count_documents({"inventory_id": str(inv["_id"])})
     return inventories
 
 @api_router.post("/inventories")
