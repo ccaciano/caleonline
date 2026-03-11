@@ -1,30 +1,23 @@
 [
   {
-    "_id": "5170108a-c587-44bb-8773-fcd56b497dee",
-    "code": "001",
-    "ean": "7891234567890",
-    "description": "Creme Hidratante 250ml",
-    "created_at": "2026-03-11T15:36:39.057594"
+    "_id": "31bc0cba-bdaa-4573-a176-925cc567f7b4",
+    "code": "PROD001",
+    "ean": "",
+    "description": "Produto Com EAN Vazio",
+    "created_at": "2026-03-11T15:52:25.453924"
   },
   {
-    "_id": "6cedd333-88ad-4198-bbe4-cdeb9ecd5ea7",
-    "code": "27HS030I23",
-    "ean": "3253581764299",
-    "description": "SERUM IMMORTELLE HARMONY 30ML",
-    "created_at": "2026-03-11T15:36:39.057656"
+    "_id": "474473cc-3825-44f4-8f7b-ae035c2e6455",
+    "code": "PROD002",
+    "ean": "1234567890123",
+    "description": "Produto Com EAN",
+    "created_at": "2026-03-11T15:52:25.453989"
   },
   {
-    "_id": "a0a711aa-b4f7-4e49-9ed7-91fb0b4233eb",
-    "code": "01SA050KK24H",
-    "ean": "3253581770900",
-    "description": "SABONETE KARITE CITRICO EXT SUAVE 50GR",
-    "created_at": "2026-03-11T15:36:39.057711"
-  },
-  {
-    "_id": "998b3d7d-6adb-4221-9e82-266292744120",
-    "code": "11AS075G24",
-    "ean": "3253581769867",
-    "description": "CONDICIONADOR REPARACAO INTENSIVA 75ML",
-    "created_at": "2026-03-11T15:36:39.057765"
+    "_id": "d56305e3-82bf-45a3-8c80-dc27968d751b",
+    "code": "PROD003",
+    "ean": "",
+    "description": "Outro Produto Sem EAN",
+    "created_at": "2026-03-11T15:52:25.454053"
   }
 ]

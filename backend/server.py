@@ -431,10 +431,10 @@ async def upload_products_csv(data: CSVUpload, clear_existing: bool = True):
                             code = normalized_row[possible_key]
                             break
                     
-                    # Search for EAN column
+                    # Search for EAN column (OPCIONAL)
                     for possible_key in ['EAN', 'ean', 'Ean']:
-                        if possible_key in normalized_row and normalized_row[possible_key]:
-                            ean = normalized_row[possible_key]
+                        if possible_key in normalized_row:
+                            ean = normalized_row[possible_key] or ''  # Pode ser vazio
                             break
                     
                     # Search for description column
@@ -443,27 +443,38 @@ async def upload_products_csv(data: CSVUpload, clear_existing: bool = True):
                             description = normalized_row[possible_key]
                             break
                     
-                    # If still not found, try by column position (first 3 columns)
-                    if not code or not ean or not description:
+                    # If code or description still not found, try by column position
+                    if not code or not description:
                         keys = list(normalized_row.keys())
                         values = list(normalized_row.values())
-                        if len(keys) >= 3:
+                        if len(keys) >= 2:
                             if not code and values[0]:
                                 code = values[0]
-                            if not ean and values[1]:
-                                ean = values[1]
-                            if not description and values[2]:
-                                description = values[2]
+                            # Se tiver 3 colunas, a do meio é EAN
+                            if len(keys) >= 3:
+                                if ean is None and values[1]:
+                                    ean = values[1]
+                                if not description and values[2]:
+                                    description = values[2]
+                            # Se tiver apenas 2 colunas (código e descrição)
+                            elif len(keys) == 2:
+                                if not description and values[1]:
+                                    description = values[1]
                     
                     logging.info(f"CSV Upload - Extracted: code={code}, ean={ean}, description={description}")
                     
-                    if not code or not ean or not description:
-                        errors.append(f"Missing fields in row: {normalized_row}")
-                        logging.warning(f"CSV Upload - Missing fields in row: {normalized_row}")
+                    # Apenas código e descrição são obrigatórios, EAN é opcional
+                    if not code or not description:
+                        errors.append(f"Missing required fields (code, description) in row: {normalized_row}")
+                        logging.warning(f"CSV Upload - Missing required fields in row: {normalized_row}")
                         continue
                     
+                    # Garantir que ean seja string (pode ser vazio)
+                    if ean is None:
+                        ean = ''
+                    
                     if not clear_existing:
-                        existing = next((p for p in all_products if p.get('code') == code or p.get('ean') == ean), None)
+                        existing = next((p for p in all_products if p.get('code') == code or (ean and p.get('ean') == ean)), None)
                         if existing:
                             existing['code'] = code
                             existing['ean'] = ean

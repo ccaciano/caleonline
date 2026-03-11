@@ -164,8 +164,8 @@ export default function CountingScreen() {
       return;
     }
 
-    if (!formData.quantity || !formData.lot || !formData.expiry_date) {
-      Alert.alert(t('fillAllFields'));
+    if (!formData.quantity) {
+      Alert.alert(t('fillAllFields'), 'Preencha pelo menos a quantidade');
       return;
     }
 
@@ -176,8 +176,8 @@ export default function CountingScreen() {
       return;
     }
 
-    // Validar data (formato DD/MM/AAAA)
-    if (!isValidDate(formData.expiry_date)) {
+    // Validar data (formato DD/MM/AAAA) - apenas se preenchida
+    if (formData.expiry_date && !isValidDate(formData.expiry_date)) {
       Alert.alert(t('invalidDate'), 'Use o formato DD/MM/AAAA');
       return;
     }
@@ -186,11 +186,11 @@ export default function CountingScreen() {
       setLoading(true);
       const newItem = await addCountedItem(inventoryId, {
         product_code: productFound.code,
-        ean: productFound.ean,
+        ean: productFound.ean || '',
         description: productFound.description,
         quantity,
-        lot: formData.lot,
-        expiry_date: convertToISO(formData.expiry_date),
+        lot: formData.lot || '',
+        expiry_date: formData.expiry_date ? convertToISO(formData.expiry_date) : '',
       });
       
       setItems([newItem, ...items]);
@@ -330,7 +330,7 @@ export default function CountingScreen() {
       <View style={styles.itemDetails}>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>EAN:</Text>
-          <Text style={styles.detailValue}>{item.ean}</Text>
+          <Text style={styles.detailValue}>{item.ean || '-'}</Text>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>{t('description')}:</Text>
@@ -342,11 +342,11 @@ export default function CountingScreen() {
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>{t('lot')}:</Text>
-          <Text style={styles.detailValue}>{item.lot}</Text>
+          <Text style={styles.detailValue}>{item.lot || '-'}</Text>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>{t('expiryDate')}:</Text>
-          <Text style={styles.detailValue}>{convertFromISO(item.expiry_date)}</Text>
+          <Text style={styles.detailValue}>{item.expiry_date ? convertFromISO(item.expiry_date) : '-'}</Text>
         </View>
       </View>
     </View>
