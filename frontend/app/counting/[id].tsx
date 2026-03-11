@@ -126,27 +126,41 @@ export default function CountingScreen() {
       if (product) {
         setProductFound({
           code: product.code,
-          ean: product.ean,
+          ean: product.ean || '',
           description: product.description,
         });
       } else {
         setProductFound(null);
-        // Show modal to add product
-        Alert.alert(
-          t('productNotFound'),
-          t('productNotFoundMessage'),
-          [
-            { text: t('cancel'), style: 'cancel' },
-            {
-              text: t('registerProduct'),
-              onPress: () => setAddProductModalVisible(true),
-            },
-          ]
-        );
+        // Show modal to add product - usar window.confirm na web
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const confirmed = window.confirm(
+            'Produto não encontrado na base de dados.\n\nDeseja cadastrar este produto?'
+          );
+          if (confirmed) {
+            setAddProductModalVisible(true);
+          }
+        } else {
+          // Em dispositivos nativos, usa o Alert normal
+          Alert.alert(
+            t('productNotFound'),
+            t('productNotFoundMessage'),
+            [
+              { text: t('cancel'), style: 'cancel' },
+              {
+                text: t('registerProduct'),
+                onPress: () => setAddProductModalVisible(true),
+              },
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('Error searching product:', error);
-      Alert.alert('Erro', 'Falha ao buscar produto');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Erro: Falha ao buscar produto');
+      } else {
+        Alert.alert('Erro', 'Falha ao buscar produto');
+      }
     } finally {
       setSearchingProduct(false);
     }
