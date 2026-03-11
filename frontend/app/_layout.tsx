@@ -79,10 +79,10 @@ export default function DrawerLayout() {
         <Drawer.Screen
           name="index"
           options={{
-            drawerLabel: t('storeConfig'),
-            title: t('storeConfig'),
+            drawerLabel: t('inventories'),
+            title: t('inventories'),
             drawerIcon: ({ color, size }) => (
-              <Ionicons name="settings-outline" size={size} color={color} />
+              <Ionicons name="list-outline" size={size} color={color} />
             ),
           }}
         />
@@ -97,12 +97,12 @@ export default function DrawerLayout() {
           }}
         />
         <Drawer.Screen
-          name="inventories"
+          name="store-config"
           options={{
-            drawerLabel: t('inventories'),
-            title: t('inventories'),
+            drawerLabel: t('storeConfig'),
+            title: t('storeConfig'),
             drawerIcon: ({ color, size }) => (
-              <Ionicons name="list-outline" size={size} color={color} />
+              <Ionicons name="settings-outline" size={size} color={color} />
             ),
           }}
         />
