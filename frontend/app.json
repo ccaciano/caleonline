@@ -46,7 +46,8 @@
         {
           "cameraPermission": "Scan barcodes to add products"
         }
-      ]
+      ],
+      "expo-mail-composer"
     ],
     "experiments": {
       "typedRoutes": true
