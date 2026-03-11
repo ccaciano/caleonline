@@ -109,6 +109,9 @@ class ProductCreate(BaseModel):
     ean: str
     description: str
 
+class CSVUpload(BaseModel):
+    file_content: str
+
 # Store Configuration Endpoints
 @api_router.post("/store/config")
 async def save_store_config(config: StoreConfig):
@@ -365,10 +368,12 @@ async def update_product(product_id: str, product: ProductCreate):
     return target_product
 
 @api_router.post("/products/upload")
-async def upload_products_csv(file_content: str, clear_existing: bool = True):
+async def upload_products_csv(data: CSVUpload, clear_existing: bool = True):
     try:
         import csv
         import io
+        
+        file_content = data.file_content
         
         with file_locks['products']:
             if clear_existing:
