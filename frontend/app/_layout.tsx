@@ -2,9 +2,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Drawer } from 'expo-router/drawer';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View, Text, Image } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
 import { DrawerContentScrollView, DrawerItemList, DrawerContentComponentProps } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEffect } from 'react';
+import * as NavigationBar from 'expo-navigation-bar';
 import '../utils/i18n';
 
 // Componente customizado para o conteúdo do Drawer
@@ -38,6 +40,27 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 
 export default function DrawerLayout() {
   const { t } = useTranslation();
+
+  // Configurar Navigation Bar no Android para modo imersivo (oculta com gestos)
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const setupNavigationBar = async () => {
+        try {
+          // Definir comportamento da Navigation Bar para "immersive" 
+          // Isso faz a barra ocultar e reaparecer com gestos
+          await NavigationBar.setVisibilityAsync('hidden');
+          await NavigationBar.setBehaviorAsync('overlay-swipe');
+          
+          // Definir cor de fundo transparente quando visível
+          await NavigationBar.setBackgroundColorAsync('#00000000');
+          await NavigationBar.setButtonStyleAsync('light');
+        } catch (error) {
+          console.log('NavigationBar setup error:', error);
+        }
+      };
+      setupNavigationBar();
+    }
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
