@@ -340,7 +340,14 @@ async def search_product(query: str):
     with file_locks['products']:
         all_products = read_json_file(PRODUCTS_FILE, default=[])
     
-    product = next((p for p in all_products if p.get('code') == query or p.get('ean') == query), None)
+    # Pesquisa case-insensitive
+    query_lower = query.lower()
+    product = next(
+        (p for p in all_products 
+         if p.get('code', '').lower() == query_lower 
+         or p.get('ean', '').lower() == query_lower), 
+        None
+    )
     return product
 
 @api_router.post("/products")

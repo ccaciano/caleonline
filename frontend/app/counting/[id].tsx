@@ -30,8 +30,6 @@ import BarcodeScanner from '../../components/BarcodeScanner';
 import EditItemModal from '../../components/EditItemModal';
 import AddProductModal from '../../components/AddProductModal';
 import { generateExcelReport, shareExcelFile } from '../../utils/excelExport';
-import * as MailComposer from 'expo-mail-composer';
-import { getStoreConfig } from '../../services/api';
 
 // Função para validar data no formato DD/MM/AAAA
 const isValidDate = (dateStr: string): boolean => {
@@ -284,99 +282,23 @@ export default function CountingScreen() {
       const fileUri = await generateExcelReport(exportData);
       console.log('Arquivo gerado:', fileUri);
       
-      // Verifica se foi salvo via SAF (Android) - URI começa com content://
-      const savedViaSAF = fileUri.startsWith('content://');
-      
       if (Platform.OS === 'web' || fileUri === 'web-download') {
         // Na web, o download já foi feito automaticamente
         Alert.alert(
           t('exportTitle'),
-          'Arquivo Excel baixado com sucesso!',
+          'Inventário encerrado e arquivo Excel baixado com sucesso!',
           [{ text: 'OK' }]
         );
-      } else if (savedViaSAF) {
-        // No Android com SAF, o arquivo já foi salvo no diretório escolhido
-        Alert.alert(
-          t('exportTitle'),
-          'Arquivo salvo com sucesso no diretório selecionado!',
-          [
-            {
-              text: t('sendEmail'),
-              onPress: async () => {
-                try {
-                  const storeConfig = await getStoreConfig();
-                  const isAvailable = await MailComposer.isAvailableAsync();
-                  
-                  if (!isAvailable) {
-                    Alert.alert('Erro', 'E-mail não disponível neste dispositivo');
-                    return;
-                  }
-
-                  await MailComposer.composeAsync({
-                    recipients: storeConfig?.email ? [storeConfig.email] : [],
-                    subject: `Relatório de Inventário - ${exportData.inventory.description}`,
-                    body: `Segue em anexo o relatório de inventário para ${exportData.inventory.description} datado de ${exportData.inventory.date}.`,
-                    attachments: [fileUri],
-                  });
-                } catch (error) {
-                  console.error('Error sending email:', error);
-                  Alert.alert('Erro', 'Falha ao enviar e-mail: ' + (error as Error).message);
-                }
-              },
-            },
-            {
-              text: 'OK',
-              style: 'cancel',
-            },
-          ]
-        );
       } else {
-        // iOS ou fallback - mostrar opções de compartilhamento
+        // No mobile, abre automaticamente o menu de compartilhamento
+        // O usuário pode escolher salvar em arquivos, enviar por email, WhatsApp, etc.
+        await shareExcelFile(fileUri);
+        
+        // Mostra mensagem de sucesso após compartilhar
         Alert.alert(
           t('exportTitle'),
-          t('exportSuccess'),
-          [
-            {
-              text: t('download'),
-              onPress: async () => {
-                try {
-                  console.log('Compartilhando arquivo...');
-                  await shareExcelFile(fileUri);
-                } catch (error) {
-                  console.error('Error sharing file:', error);
-                  Alert.alert('Erro', 'Falha ao compartilhar arquivo: ' + (error as Error).message);
-                }
-              },
-            },
-            {
-              text: t('sendEmail'),
-              onPress: async () => {
-                try {
-                  const storeConfig = await getStoreConfig();
-                  const isAvailable = await MailComposer.isAvailableAsync();
-                  
-                  if (!isAvailable) {
-                    Alert.alert('Erro', 'E-mail não disponível neste dispositivo');
-                    return;
-                  }
-
-                  await MailComposer.composeAsync({
-                    recipients: storeConfig?.email ? [storeConfig.email] : [],
-                    subject: `Relatório de Inventário - ${exportData.inventory.description}`,
-                    body: `Segue em anexo o relatório de inventário para ${exportData.inventory.description} datado de ${exportData.inventory.date}.`,
-                    attachments: [fileUri],
-                  });
-                } catch (error) {
-                  console.error('Error sending email:', error);
-                  Alert.alert('Erro', 'Falha ao enviar e-mail: ' + (error as Error).message);
-                }
-              },
-            },
-            {
-              text: 'OK',
-              style: 'cancel',
-            },
-          ]
+          'Inventário encerrado com sucesso!',
+          [{ text: 'OK' }]
         );
       }
       
