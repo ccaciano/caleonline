@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,27 +20,48 @@ interface BarcodeScannerComponentProps {
 function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponentProps) {
   const { t } = useTranslation();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [cameraId, setCameraId] = useState<string>('');
   const [cameras, setCameras] = useState<any[]>([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const [isStarted, setIsStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scannerRef = useRef<any>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
   const html5QrCodeRef = useRef<any>(null);
+  const containerIdRef = useRef(`scanner-${Date.now()}`);
 
-  // Inicializar scanner quando o modal abre
+  // Criar elemento container no DOM quando o modal abre
   useEffect(() => {
-    if (visible && Platform.OS === 'web') {
-      initializeScanner();
+    if (visible && Platform.OS === 'web' && typeof document !== 'undefined') {
+      // Criar container se não existir
+      let container = document.getElementById(containerIdRef.current);
+      if (!container) {
+        container = document.createElement('div');
+        container.id = containerIdRef.current;
+        container.style.cssText = 'width:100%;height:100%;background:#000;position:absolute;top:0;left:0;';
+      }
+      
+      // Aguardar um pouco para o modal estar pronto e então inicializar
+      const timer = setTimeout(() => {
+        initializeScanner();
+      }, 300);
+      
+      return () => {
+        clearTimeout(timer);
+      };
     }
-    
-    return () => {
+  }, [visible]);
+
+  // Cleanup quando modal fecha
+  useEffect(() => {
+    if (!visible) {
       stopScanner();
-    };
+    }
   }, [visible]);
 
   const initializeScanner = async () => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isInitializing) return;
+    
+    setIsInitializing(true);
+    setError(null);
 
     try {
       // Importar html5-qrcode dinamicamente
@@ -53,23 +74,20 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
         setCameras(devices);
         setHasPermission(true);
         
-        // Preferir câmera frontal para notebooks (geralmente tem "front" ou "user" no label)
+        // Preferir câmera frontal para notebooks
         let frontCameraIndex = devices.findIndex((d: any) => 
           d.label.toLowerCase().includes('front') || 
           d.label.toLowerCase().includes('user') ||
-          d.label.toLowerCase().includes('facetime')
+          d.label.toLowerCase().includes('facetime') ||
+          d.label.toLowerCase().includes('integrated')
         );
         
-        // Se não encontrar câmera frontal, usar a primeira
         if (frontCameraIndex === -1) frontCameraIndex = 0;
         
         setCurrentCameraIndex(frontCameraIndex);
-        setCameraId(devices[frontCameraIndex].id);
         
-        // Aguardar DOM estar pronto e iniciar
-        setTimeout(() => {
-          startScanner(devices[frontCameraIndex].id);
-        }, 500);
+        // Iniciar scanner
+        await startScanner(devices[frontCameraIndex].id);
       } else {
         setHasPermission(false);
         setError('Nenhuma câmera encontrada');
@@ -77,12 +95,18 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
     } catch (err: any) {
       console.error('Error initializing scanner:', err);
       setHasPermission(false);
-      setError(err.message || 'Erro ao acessar câmera');
+      if (err.message?.includes('Permission')) {
+        setError('Permissão para câmera negada');
+      } else {
+        setError(err.message || 'Erro ao acessar câmera');
+      }
+    } finally {
+      setIsInitializing(false);
     }
   };
 
-  const startScanner = async (camId: string) => {
-    if (typeof window === 'undefined' || !camId) return;
+  const startScanner = async (cameraId: string) => {
+    if (typeof document === 'undefined' || !cameraId) return;
     
     try {
       // Parar scanner anterior se existir
@@ -90,47 +114,62 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
       
       const { Html5Qrcode } = await import('html5-qrcode');
       
-      // Verificar se o elemento existe
-      const element = document.getElementById('html5-qrcode-scanner');
-      if (!element) {
-        console.error('Scanner element not found');
+      // Encontrar o container de câmera e adicionar o elemento do scanner
+      const cameraContainer = document.querySelector('[data-camera-container="true"]');
+      if (!cameraContainer) {
+        console.error('Camera container not found');
+        setError('Container de câmera não encontrado');
         return;
       }
 
-      html5QrCodeRef.current = new Html5Qrcode('html5-qrcode-scanner');
+      // Limpar container
+      cameraContainer.innerHTML = '';
       
+      // Criar elemento para o scanner
+      const scannerElement = document.createElement('div');
+      scannerElement.id = containerIdRef.current;
+      scannerElement.style.cssText = 'width:100%;height:100%;';
+      cameraContainer.appendChild(scannerElement);
+
+      // Criar instância do scanner
+      html5QrCodeRef.current = new Html5Qrcode(containerIdRef.current);
+      
+      // Configurar e iniciar
       await html5QrCodeRef.current.start(
-        camId,
+        cameraId,
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
         },
         (decodedText: string) => {
           handleScan(decodedText);
         },
-        (errorMessage: string) => {
-          // Ignorar erros de scan - são normais quando não há código na imagem
+        () => {
+          // Callback de erro de scan - ignorar
         }
       );
       
       setIsStarted(true);
       setError(null);
+      console.log('Scanner started successfully');
     } catch (err: any) {
       console.error('Error starting scanner:', err);
-      setError(err.message || 'Erro ao iniciar scanner');
+      setError('Erro ao iniciar câmera: ' + (err.message || 'Desconhecido'));
     }
   };
 
   const stopScanner = async () => {
-    if (html5QrCodeRef.current && isStarted) {
+    if (html5QrCodeRef.current) {
       try {
-        await html5QrCodeRef.current.stop();
-        html5QrCodeRef.current = null;
-        setIsStarted(false);
+        if (isStarted) {
+          await html5QrCodeRef.current.stop();
+        }
+        html5QrCodeRef.current.clear();
       } catch (err) {
         console.error('Error stopping scanner:', err);
       }
+      html5QrCodeRef.current = null;
+      setIsStarted(false);
     }
   };
 
@@ -149,15 +188,13 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
     
     const nextIndex = (currentCameraIndex + 1) % cameras.length;
     setCurrentCameraIndex(nextIndex);
-    setCameraId(cameras[nextIndex].id);
-    
-    // Reiniciar com nova câmera
     await startScanner(cameras[nextIndex].id);
   };
 
   if (!visible) return null;
 
-  if (hasPermission === false) {
+  // Tela de erro/permissão
+  if (hasPermission === false || error) {
     return (
       <Modal
         isVisible={visible}
@@ -205,27 +242,25 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
           </View>
         </View>
 
-        <View style={styles.cameraContainer}>
-          {Platform.OS === 'web' && (
-            <View 
-              style={styles.webScannerWrapper}
-              // @ts-ignore - Web-specific attribute
-              dangerouslySetInnerHTML={{
-                __html: '<div id="html5-qrcode-scanner" style="width:100%;height:100%;background:#000;"></div>'
-              }}
-            />
-          )}
-        </View>
+        {/* Container da câmera - será preenchido via JS */}
+        <View 
+          style={styles.cameraContainer}
+          // @ts-ignore
+          data-camera-container="true"
+        />
 
         <View style={styles.instructions}>
           <Text style={styles.instructionsText}>{t('scannerInstructions')}</Text>
           {cameras.length > 0 && (
             <Text style={styles.cameraTypeText}>
-              Câmera: {cameras[currentCameraIndex]?.label || 'Desconhecida'}
+              Câmera: {cameras[currentCameraIndex]?.label || 'Carregando...'}
             </Text>
           )}
+          {isInitializing && (
+            <Text style={styles.tipText}>Inicializando câmera...</Text>
+          )}
           <Text style={styles.tipText}>
-            💡 Se a leitura automática não funcionar, digite o código manualmente
+            💡 Se não funcionar, digite o código manualmente
           </Text>
         </View>
       </View>
@@ -451,6 +486,7 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: '#000',
   },
   overlay: {
     position: 'absolute',
@@ -476,14 +512,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     zIndex: 10,
-  },
-  webScannerWrapper: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#000',
   },
   instructionsText: {
     fontSize: 16,
