@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -79,6 +80,76 @@ export default function ProductsScreen() {
     }
   };
 
+  // Processa o conteúdo CSV após upload
+  const processCSVUpload = async (csvContent: string) => {
+    try {
+      setUploading(true);
+      
+      // Upload to API
+      const uploadResult = await uploadProductsCSV(csvContent, true);
+      
+      Alert.alert(
+        t('uploadSuccess'),
+        `${uploadResult.products_added} ${t('productsAdded')}`
+      );
+      
+      // Reload products
+      setPage(1);
+      await loadProducts(1, '');
+      setSearchQuery('');
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      Alert.alert(t('uploadError'), error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handler para web file input
+  const handleWebFileSelect = async (event: any) => {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const csvContent = e.target?.result as string;
+      if (csvContent) {
+        await processCSVUpload(csvContent);
+      }
+    };
+    reader.onerror = () => {
+      Alert.alert(t('uploadError'), 'Falha ao ler o arquivo');
+    };
+    reader.readAsText(file);
+
+    // Reset input para permitir selecionar o mesmo arquivo novamente
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  // Upload CSV - versão para mobile (nativo)
+  const handleNativeUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      // Read file content
+      const response = await fetch(result.assets[0].uri);
+      const csvContent = await response.text();
+      
+      await processCSVUpload(csvContent);
+    } catch (error) {
+      console.error('Error picking document:', error);
+      Alert.alert(t('uploadError'), error instanceof Error ? error.message : 'Unknown error');
+    }
+  };
+
+  // Upload CSV - versão principal que detecta a plataforma
   const handleUploadCSV = async () => {
     Alert.alert(
       t('uploadCSV'),
@@ -89,37 +160,18 @@ export default function ProductsScreen() {
           text: t('continue') || 'Continuar',
           style: 'destructive',
           onPress: async () => {
-            try {
-              const result = await DocumentPicker.getDocumentAsync({
-                type: 'text/csv',
-                copyToCacheDirectory: true,
-              });
-
-              if (result.canceled) return;
-
-              setUploading(true);
-              
-              // Read file content
-              const response = await fetch(result.assets[0].uri);
-              const csvContent = await response.text();
-              
-              // Upload to API
-              const uploadResult = await uploadProductsCSV(csvContent, true);
-              
-              Alert.alert(
-                t('uploadSuccess'),
-                `${uploadResult.products_added} ${t('productsAdded')}`
-              );
-              
-              // Reload products
-              setPage(1);
-              await loadProducts(1, '');
-              setSearchQuery('');
-            } catch (error) {
-              console.error('Error uploading CSV:', error);
-              Alert.alert(t('uploadError'), error instanceof Error ? error.message : 'Unknown error');
-            } finally {
-              setUploading(false);
+            if (Platform.OS === 'web') {
+              // Na web, dispara o click no input hidden
+              if (typeof document !== 'undefined') {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.csv,text/csv';
+                input.onchange = handleWebFileSelect;
+                input.click();
+              }
+            } else {
+              // Em dispositivos nativos, usa o DocumentPicker
+              await handleNativeUpload();
             }
           },
         },
