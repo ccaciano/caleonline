@@ -19,18 +19,48 @@ import {
   getInventory,
   getCountedItems,
   addCountedItem,
-  updateCountedItem,
   deleteCountedItem,
   closeInventory,
   getExportData,
+  searchProduct,
   Inventory,
   CountedItem,
 } from '../../services/api';
 import BarcodeScanner from '../../components/BarcodeScanner';
 import EditItemModal from '../../components/EditItemModal';
+import AddProductModal from '../../components/AddProductModal';
 import { generateExcelReport, shareExcelFile } from '../../utils/excelExport';
 import * as MailComposer from 'expo-mail-composer';
 import { getStoreConfig } from '../../services/api';
+
+// Função para validar data no formato DD/MM/AAAA
+const isValidDate = (dateStr: string): boolean => {
+  const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  const match = dateStr.match(regex);
+  if (!match) return false;
+  
+  const day = parseInt(match[1]);
+  const month = parseInt(match[2]);
+  const year = parseInt(match[3]);
+  
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  if (year < 1900 || year > 2100) return false;
+  
+  return true;
+};
+
+// Função para converter DD/MM/AAAA para AAAA-MM-DD
+const convertToISO = (dateStr: string): string => {
+  const [day, month, year] = dateStr.split('/');
+  return `${year}-${month}-${day}`;
+};
+
+// Função para converter AAAA-MM-DD para DD/MM/AAAA
+const convertFromISO = (isoStr: string): string => {
+  const [year, month, day] = isoStr.split('-');
+  return `${day}/${month}/${year}`;
+};
 
 export default function CountingScreen() {
   const { t } = useTranslation();
@@ -43,9 +73,17 @@ export default function CountingScreen() {
   const [loading, setLoading] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [editItem, setEditItem] = useState<CountedItem | null>(null);
+  const [addProductModalVisible, setAddProductModalVisible] = useState(false);
+  const [searchingProduct, setSearchingProduct] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [productFound, setProductFound] = useState<{
+    code: string;
+    ean: string;
+    description: string;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
-    product_code: '',
     quantity: '',
     lot: '',
     expiry_date: '',
@@ -66,47 +104,110 @@ export default function CountingScreen() {
       setItems(itemsData);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load data');
+      Alert.alert('Erro', 'Falha ao carregar dados');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchQuery('');
+      setProductFound(null);
+      return;
+    }
+
+    setSearchQuery(query);
+    setSearchingProduct(true);
+
+    try {
+      const product = await searchProduct(query);
+      
+      if (product) {
+        setProductFound({
+          code: product.code,
+          ean: product.ean,
+          description: product.description,
+        });
+      } else {
+        setProductFound(null);
+        // Show modal to add product
+        Alert.alert(
+          t('productNotFound'),
+          t('productNotFoundMessage'),
+          [
+            { text: t('cancel'), style: 'cancel' },
+            {
+              text: t('registerProduct'),
+              onPress: () => setAddProductModalVisible(true),
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error searching product:', error);
+      Alert.alert('Erro', 'Falha ao buscar produto');
+    } finally {
+      setSearchingProduct(false);
+    }
+  };
+
   const handleScan = (code: string) => {
-    setFormData({ ...formData, product_code: code });
     setScannerVisible(false);
+    handleSearch(code);
   };
 
   const handleAddItem = async () => {
-    if (!formData.product_code || !formData.quantity || !formData.lot || !formData.expiry_date) {
+    // Validações
+    if (!productFound) {
+      Alert.alert('Erro', 'Busque um produto primeiro');
+      return;
+    }
+
+    if (!formData.quantity || !formData.lot || !formData.expiry_date) {
       Alert.alert(t('fillAllFields'));
       return;
     }
 
+    // Validar quantidade (apenas números)
     const quantity = parseInt(formData.quantity);
     if (isNaN(quantity) || quantity <= 0) {
       Alert.alert(t('invalidQuantity'));
       return;
     }
 
+    // Validar data (formato DD/MM/AAAA)
+    if (!isValidDate(formData.expiry_date)) {
+      Alert.alert(t('invalidDate'), 'Use o formato DD/MM/AAAA');
+      return;
+    }
+
     try {
       setLoading(true);
       const newItem = await addCountedItem(inventoryId, {
-        product_code: formData.product_code,
+        product_code: productFound.code,
+        ean: productFound.ean,
+        description: productFound.description,
         quantity,
         lot: formData.lot,
-        expiry_date: formData.expiry_date,
+        expiry_date: convertToISO(formData.expiry_date),
       });
+      
       setItems([newItem, ...items]);
+      
+      // Limpar formulário
       setFormData({
-        product_code: '',
         quantity: '',
         lot: '',
         expiry_date: '',
       });
+      setSearchQuery('');
+      setProductFound(null);
+      
+      Alert.alert('Sucesso', 'Item adicionado!');
     } catch (error) {
       console.error('Error adding item:', error);
-      Alert.alert('Error', 'Failed to add item');
+      Alert.alert('Erro', 'Falha ao adicionar item');
     } finally {
       setLoading(false);
     }
@@ -125,9 +226,10 @@ export default function CountingScreen() {
             try {
               await deleteCountedItem(inventoryId, item._id!);
               setItems(items.filter((i) => i._id !== item._id));
+              Alert.alert('Sucesso', 'Item excluído');
             } catch (error) {
               console.error('Error deleting item:', error);
-              Alert.alert('Error', 'Failed to delete item');
+              Alert.alert('Erro', 'Falha ao excluir item');
             }
           },
         },
@@ -140,24 +242,25 @@ export default function CountingScreen() {
     loadData();
   };
 
+  const handleProductAdded = (product: { code: string; ean: string; description: string }) => {
+    setAddProductModalVisible(false);
+    setProductFound(product);
+    setSearchQuery(product.code);
+  };
+
   const handleExport = async () => {
     if (items.length === 0) {
-      Alert.alert('Error', 'No items to export');
+      Alert.alert('Erro', 'Nenhum item para exportar');
       return;
     }
 
     try {
       setLoading(true);
-      // Close inventory first
       await closeInventory(inventoryId);
       
-      // Get export data
       const exportData = await getExportData(inventoryId);
-      
-      // Generate Excel file
       const fileUri = await generateExcelReport(exportData);
       
-      // Show options: Download or Email
       Alert.alert(
         t('exportTitle'),
         t('exportSuccess'),
@@ -180,26 +283,25 @@ export default function CountingScreen() {
                 const isAvailable = await MailComposer.isAvailableAsync();
                 
                 if (!isAvailable) {
-                  Alert.alert('Error', 'Email is not available on this device');
+                  Alert.alert('Erro', 'E-mail não disponível neste dispositivo');
                   return;
                 }
 
                 await MailComposer.composeAsync({
                   recipients: storeConfig?.email ? [storeConfig.email] : [],
-                  subject: `Inventory Report - ${exportData.inventory.description}`,
-                  body: `Attached is the inventory report for ${exportData.inventory.description} dated ${exportData.inventory.date}.`,
+                  subject: `Relatório de Inventário - ${exportData.inventory.description}`,
+                  body: `Segue em anexo o relatório de inventário para ${exportData.inventory.description} datado de ${exportData.inventory.date}.`,
                   attachments: [fileUri],
                 });
               } catch (error) {
                 console.error('Error sending email:', error);
-                Alert.alert('Error', 'Failed to send email');
+                Alert.alert('Erro', 'Falha ao enviar e-mail');
               }
             },
           },
         ]
       );
       
-      // Reload to show closed status
       loadData();
     } catch (error) {
       console.error('Error exporting:', error);
@@ -227,6 +329,14 @@ export default function CountingScreen() {
       </View>
       <View style={styles.itemDetails}>
         <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>EAN:</Text>
+          <Text style={styles.detailValue}>{item.ean}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>{t('description')}:</Text>
+          <Text style={styles.detailValue} numberOfLines={2}>{item.description}</Text>
+        </View>
+        <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>{t('quantity')}:</Text>
           <Text style={styles.detailValue}>{item.quantity}</Text>
         </View>
@@ -236,7 +346,7 @@ export default function CountingScreen() {
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>{t('expiryDate')}:</Text>
-          <Text style={styles.detailValue}>{item.expiry_date}</Text>
+          <Text style={styles.detailValue}>{convertFromISO(item.expiry_date)}</Text>
         </View>
       </View>
     </View>
@@ -283,6 +393,7 @@ export default function CountingScreen() {
           <View style={styles.inputSection}>
             <Text style={styles.sectionTitle}>{t('addItem')}</Text>
             
+            {/* Botão Escanear */}
             <View style={styles.scanButtonContainer}>
               <TouchableOpacity
                 style={styles.scanButton}
@@ -293,24 +404,65 @@ export default function CountingScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Campo de Pesquisa */}
             <View style={styles.form}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>{t('productCode')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.product_code}
-                  onChangeText={(text) => setFormData({ ...formData, product_code: text })}
-                  placeholder={t('productCode')}
-                  placeholderTextColor="#999"
-                />
+                <Text style={styles.label}>{t('search')}</Text>
+                <View style={styles.searchContainer}>
+                  <TextInput
+                    style={styles.searchInput}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    onSubmitEditing={() => handleSearch(searchQuery)}
+                    placeholder={t('searchPlaceholder')}
+                    placeholderTextColor="#999"
+                  />
+                  <TouchableOpacity onPress={() => handleSearch(searchQuery)} disabled={searchingProduct}>
+                    {searchingProduct ? (
+                      <ActivityIndicator size="small" color="#007AFF" />
+                    ) : (
+                      <Ionicons name="search" size={24} color="#007AFF" />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
 
+              {/* Campos Read-Only do Produto */}
+              {productFound && (
+                <View style={styles.productFoundSection}>
+                  <View style={styles.productFoundHeader}>
+                    <Ionicons name="checkmark-circle" size={24} color="#34C759" />
+                    <Text style={styles.productFoundTitle}>Produto Encontrado</Text>
+                  </View>
+                  
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>{t('productCode')}</Text>
+                    <Text style={styles.readOnlyValue}>{productFound.code}</Text>
+                  </View>
+                  
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>EAN</Text>
+                    <Text style={styles.readOnlyValue}>{productFound.ean}</Text>
+                  </View>
+                  
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>{t('description')}</Text>
+                    <Text style={styles.readOnlyValue}>{productFound.description}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Campos Editáveis */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>{t('quantity')}</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.quantity}
-                  onChangeText={(text) => setFormData({ ...formData, quantity: text })}
+                  onChangeText={(text) => {
+                    // Apenas números
+                    const numbers = text.replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, quantity: numbers });
+                  }}
                   placeholder={t('quantity')}
                   placeholderTextColor="#999"
                   keyboardType="numeric"
@@ -333,16 +485,28 @@ export default function CountingScreen() {
                 <TextInput
                   style={styles.input}
                   value={formData.expiry_date}
-                  onChangeText={(text) => setFormData({ ...formData, expiry_date: text })}
-                  placeholder="YYYY-MM-DD"
+                  onChangeText={(text) => {
+                    // Formatar automaticamente DD/MM/AAAA
+                    let formatted = text.replace(/\D/g, '');
+                    if (formatted.length >= 2) {
+                      formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
+                    }
+                    if (formatted.length >= 5) {
+                      formatted = formatted.slice(0, 5) + '/' + formatted.slice(5, 9);
+                    }
+                    setFormData({ ...formData, expiry_date: formatted });
+                  }}
+                  placeholder="DD/MM/AAAA"
                   placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  maxLength={10}
                 />
               </View>
 
               <TouchableOpacity
-                style={styles.addButton}
+                style={[styles.addButton, (!productFound || loading) && styles.addButtonDisabled]}
                 onPress={handleAddItem}
-                disabled={loading}
+                disabled={!productFound || loading}
               >
                 <Ionicons name="add-circle" size={24} color="#FFFFFF" />
                 <Text style={styles.addButtonText}>{t('addItem')}</Text>
@@ -407,6 +571,13 @@ export default function CountingScreen() {
           onSuccess={handleEditSuccess}
         />
       )}
+
+      <AddProductModal
+        visible={addProductModalVisible}
+        initialCode={searchQuery}
+        onClose={() => setAddProductModalVisible(false)}
+        onSuccess={handleProductAdded}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -505,6 +676,55 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    minHeight: 52,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+    paddingVertical: 14,
+  },
+  productFoundSection: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  productFoundHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  productFoundTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#34C759',
+  },
+  readOnlyField: {
+    gap: 4,
+  },
+  readOnlyLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+  },
+  readOnlyValue: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500',
+  },
   input: {
     backgroundColor: '#F2F2F7',
     borderWidth: 1,
@@ -525,6 +745,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
     minHeight: 52,
+  },
+  addButtonDisabled: {
+    backgroundColor: '#C7C7CC',
   },
   addButtonText: {
     color: '#FFFFFF',
@@ -559,7 +782,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
   },
   itemCodeContainer: {
     flexDirection: 'row',
@@ -580,20 +806,25 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   itemDetails: {
-    gap: 4,
+    gap: 6,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#8E8E93',
+    fontWeight: '500',
+    width: 100,
   },
   detailValue: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#000',
+    textAlign: 'right',
   },
   emptyState: {
     alignItems: 'center',
