@@ -151,32 +151,46 @@ export default function ProductsScreen() {
 
   // Upload CSV - versão principal que detecta a plataforma
   const handleUploadCSV = async () => {
-    Alert.alert(
-      t('uploadCSV'),
-      t('csvWillReplace'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('continue') || 'Continuar',
-          style: 'destructive',
-          onPress: async () => {
-            if (Platform.OS === 'web') {
-              // Na web, dispara o click no input hidden
-              if (typeof document !== 'undefined') {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.csv,text/csv';
-                input.onchange = handleWebFileSelect;
-                input.click();
-              }
-            } else {
-              // Em dispositivos nativos, usa o DocumentPicker
-              await handleNativeUpload();
+    if (Platform.OS === 'web') {
+      // Na web, o Alert não funciona bem, então mostramos um confirm nativo
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const confirmed = window.confirm(
+          'Atenção: O upload irá substituir todos os produtos existentes. Deseja continuar?'
+        );
+        
+        if (confirmed) {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.csv,text/csv,text/plain';
+          input.style.display = 'none';
+          input.onchange = handleWebFileSelect;
+          document.body.appendChild(input);
+          input.click();
+          // Remove o input após um pequeno delay
+          setTimeout(() => {
+            if (input.parentNode) {
+              document.body.removeChild(input);
             }
+          }, 1000);
+        }
+      }
+    } else {
+      // Em dispositivos nativos, usa o Alert normal
+      Alert.alert(
+        t('uploadCSV'),
+        t('csvWillReplace'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('continue') || 'Continuar',
+            style: 'destructive',
+            onPress: async () => {
+              await handleNativeUpload();
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleAddProduct = () => {
