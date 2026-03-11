@@ -19,6 +19,38 @@ interface CreateInventoryModalProps {
   onSuccess: () => void;
 }
 
+// Função para validar data no formato DD/MM/AAAA
+const isValidDate = (dateStr: string): boolean => {
+  const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  const match = dateStr.match(regex);
+  if (!match) return false;
+  
+  const day = parseInt(match[1]);
+  const month = parseInt(match[2]);
+  const year = parseInt(match[3]);
+  
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  if (year < 1900 || year > 2100) return false;
+  
+  return true;
+};
+
+// Função para converter DD/MM/AAAA para AAAA-MM-DD
+const convertToISO = (dateStr: string): string => {
+  const [day, month, year] = dateStr.split('/');
+  return `${year}-${month}-${day}`;
+};
+
+// Função para obter data atual no formato DD/MM/AAAA
+const getCurrentDateFormatted = (): string => {
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const year = today.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export default function CreateInventoryModal({
   visible,
   onClose,
@@ -26,7 +58,7 @@ export default function CreateInventoryModal({
 }: CreateInventoryModalProps) {
   const { t } = useTranslation();
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getCurrentDateFormatted());
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
@@ -35,18 +67,19 @@ export default function CreateInventoryModal({
       return;
     }
 
-    // Validate date format
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      Alert.alert(t('invalidDate'));
+    // Validar data no formato DD/MM/AAAA
+    if (!isValidDate(date)) {
+      Alert.alert(t('invalidDate'), 'Use o formato DD/MM/AAAA');
       return;
     }
 
     try {
       setLoading(true);
-      await createInventory({ description, date });
+      // Converter para formato ISO antes de enviar
+      const isoDate = convertToISO(date);
+      await createInventory({ description, date: isoDate });
       setDescription('');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getCurrentDateFormatted());
       onSuccess();
     } catch (error) {
       console.error('Error creating inventory:', error);
@@ -59,9 +92,21 @@ export default function CreateInventoryModal({
   const handleClose = () => {
     if (!loading) {
       setDescription('');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getCurrentDateFormatted());
       onClose();
     }
+  };
+
+  const handleDateChange = (text: string) => {
+    // Formatar automaticamente DD/MM/AAAA
+    let formatted = text.replace(/\D/g, '');
+    if (formatted.length >= 2) {
+      formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
+    }
+    if (formatted.length >= 5) {
+      formatted = formatted.slice(0, 5) + '/' + formatted.slice(5, 9);
+    }
+    setDate(formatted);
   };
 
   return (
@@ -100,11 +145,14 @@ export default function CreateInventoryModal({
             <TextInput
               style={styles.input}
               value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
+              onChangeText={handleDateChange}
+              placeholder="DD/MM/AAAA"
               placeholderTextColor="#999"
+              keyboardType="numeric"
+              maxLength={10}
               editable={!loading}
             />
+            <Text style={styles.hint}>Formato: DD/MM/AAAA</Text>
           </View>
 
           <View style={styles.buttons}>
@@ -144,7 +192,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    minHeight: 300,
+    minHeight: 350,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -177,6 +225,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     minHeight: 52,
+  },
+  hint: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 4,
   },
   buttons: {
     flexDirection: 'row',

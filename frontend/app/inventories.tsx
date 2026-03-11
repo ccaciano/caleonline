@@ -16,6 +16,13 @@ import { getInventories, Inventory } from '../services/api';
 import Modal from 'react-native-modal';
 import CreateInventoryModal from '../components/CreateInventoryModal';
 
+// Função para converter AAAA-MM-DD para DD/MM/AAAA
+const convertFromISO = (isoStr: string): string => {
+  if (!isoStr) return '';
+  const [year, month, day] = isoStr.split('-');
+  return `${day}/${month}/${year}`;
+};
+
 export default function InventoriesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -91,7 +98,7 @@ export default function InventoriesScreen() {
       <View style={styles.cardInfo}>
         <View style={styles.infoRow}>
           <Ionicons name="calendar-outline" size={16} color="#8E8E93" />
-          <Text style={styles.infoText}>{item.date}</Text>
+          <Text style={styles.infoText}>{convertFromISO(item.date)}</Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="cube-outline" size={16} color="#8E8E93" />

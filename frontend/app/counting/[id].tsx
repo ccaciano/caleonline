@@ -380,7 +380,7 @@ export default function CountingScreen() {
             <Text style={styles.title} numberOfLines={1}>
               {inventory.description}
             </Text>
-            <Text style={styles.subtitle}>{inventory.date}</Text>
+            <Text style={styles.subtitle}>{convertFromISO(inventory.date)}</Text>
           </View>
           {isClosed && (
             <View style={styles.closedBadge}>
