@@ -110,8 +110,8 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 320px;
-        height: 320px;
+        width: 400px;
+        height: 300px;
         z-index: 9999;
         background: #000;
         border-radius: 16px;
@@ -125,9 +125,28 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
       await html5QrCodeRef.current.start(
         devices[preferredIndex].id,
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
+          fps: 15,
+          qrbox: { width: 350, height: 150 }, // Formato retangular para códigos de barras
+          aspectRatio: 1.333, // 4:3 para melhor captura de códigos de barras
+          formatsToSupport: [
+            0,  // QR_CODE
+            1,  // AZTEC
+            2,  // CODABAR
+            3,  // CODE_39
+            4,  // CODE_93
+            5,  // CODE_128
+            6,  // DATA_MATRIX
+            7,  // MAXICODE
+            8,  // ITF
+            9,  // EAN_13
+            10, // EAN_8
+            11, // PDF_417
+            12, // RSS_14
+            13, // RSS_EXPANDED
+            14, // UPC_A
+            15, // UPC_E
+            16, // UPC_EAN_EXTENSION
+          ]
         },
         (decodedText: string) => {
           handleScan(decodedText);
@@ -165,9 +184,10 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
         await html5QrCodeRef.current.start(
           cameras[nextIndex].id,
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
+            fps: 15,
+            qrbox: { width: 350, height: 150 },
+            aspectRatio: 1.333,
+            formatsToSupport: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
           },
           (decodedText: string) => {
             handleScan(decodedText);
