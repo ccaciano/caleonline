@@ -4,10 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
 
-// Importar BarCodeScanner apenas para plataformas nativas
-let BarCodeScanner: any = null;
+// Importar CameraView apenas para plataformas nativas
+let CameraView: any = null;
+let useCameraPermissions: any = null;
 if (Platform.OS !== 'web') {
-  BarCodeScanner = require('expo-barcode-scanner').BarCodeScanner;
+  const cameraModule = require('expo-camera');
+  CameraView = cameraModule.CameraView;
+  useCameraPermissions = cameraModule.useCameraPermissions;
 }
 
 interface BarcodeScannerComponentProps {
@@ -259,7 +262,7 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
             </Text>
           )}
           <Text style={styles.tipText}>
-            💡 Se não funcionar, feche e digite o código manualmente
+            Se não funcionar, feche e digite o código manualmente
           </Text>
         </View>
       </View>
@@ -267,30 +270,23 @@ function WebBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponent
   );
 }
 
-// Componente para dispositivos nativos (iOS/Android)
+// Componente para dispositivos nativos (iOS/Android) usando expo-camera
 function NativeBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerComponentProps) {
   const { t } = useTranslation();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions ? useCameraPermissions() : [null, () => {}];
   const [scanned, setScanned] = useState(false);
-  const [cameraType, setCameraType] = useState<'front' | 'back'>('back');
+  const [facing, setFacing] = useState<'front' | 'back'>('back');
 
   useEffect(() => {
-    if (visible && BarCodeScanner) {
-      requestPermission();
+    if (visible) {
       setScanned(false);
     }
   }, [visible]);
 
-  const requestPermission = async () => {
-    if (!BarCodeScanner) return;
-    const { status } = await BarCodeScanner.requestPermissionsAsync();
-    setHasPermission(status === 'granted');
-  };
-
-  const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
-    if (!scanned) {
+  const handleBarCodeScanned = (result: { data: string; type: string }) => {
+    if (!scanned && result.data) {
       setScanned(true);
-      onScan(data);
+      onScan(result.data);
     }
   };
 
@@ -299,10 +295,24 @@ function NativeBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerCompon
     onClose();
   };
 
-  if (!BarCodeScanner || !visible) return null;
-  if (hasPermission === null) return null;
+  const toggleCameraFacing = () => {
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
+  };
 
-  if (hasPermission === false) {
+  if (!CameraView || !visible) return null;
+
+  // Verificar permissão
+  if (!permission) {
+    return (
+      <Modal isVisible={visible} onBackdropPress={handleClose} style={styles.modal}>
+        <View style={styles.permissionContainer}>
+          <Text style={styles.statusText}>Carregando...</Text>
+        </View>
+      </Modal>
+    );
+  }
+
+  if (!permission.granted) {
     return (
       <Modal isVisible={visible} onBackdropPress={handleClose} style={styles.modal}>
         <View style={styles.permissionContainer}>
@@ -325,7 +335,7 @@ function NativeBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerCompon
         <View style={styles.header}>
           <Text style={styles.title}>{t('scannerTitle')}</Text>
           <View style={styles.headerButtons}>
-            <TouchableOpacity onPress={() => setCameraType(c => c === 'back' ? 'front' : 'back')} style={styles.switchCameraButton}>
+            <TouchableOpacity onPress={toggleCameraFacing} style={styles.switchCameraButton}>
               <Ionicons name="camera-reverse" size={28} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
@@ -335,11 +345,13 @@ function NativeBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerCompon
         </View>
 
         <View style={styles.cameraContainer}>
-          <BarCodeScanner
-            onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+          <CameraView
             style={StyleSheet.absoluteFillObject}
-            type={cameraType}
-            barCodeTypes={['ean13', 'ean8', 'upc_e', 'upc_a', 'qr', 'code128', 'code39']}
+            facing={facing}
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_e', 'upc_a', 'qr', 'code128', 'code39', 'code93', 'codabar', 'itf14', 'pdf417', 'aztec', 'datamatrix'],
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           />
           <View style={styles.scanOverlay}>
             <View style={styles.scanArea} />
@@ -348,7 +360,7 @@ function NativeBarcodeScanner({ visible, onClose, onScan }: BarcodeScannerCompon
 
         <View style={styles.footer}>
           <Text style={styles.instructionsText}>{t('scannerInstructions')}</Text>
-          <Text style={styles.cameraTypeText}>Câmera: {cameraType === 'front' ? 'Frontal' : 'Traseira'}</Text>
+          <Text style={styles.cameraTypeText}>Câmera: {facing === 'front' ? 'Frontal' : 'Traseira'}</Text>
           {scanned && (
             <TouchableOpacity style={styles.retryButton} onPress={() => setScanned(false)}>
               <Ionicons name="refresh" size={20} color="#FFFFFF" />

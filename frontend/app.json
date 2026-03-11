@@ -42,7 +42,7 @@
         }
       ],
       [
-        "expo-barcode-scanner",
+        "expo-camera",
         {
           "cameraPermission": "Scan barcodes to add products"
         }
