@@ -21,7 +21,6 @@ import {
   addCountedItem,
   deleteCountedItem,
   closeInventory,
-  getExportData,
   searchProduct,
   Inventory,
   CountedItem,
@@ -29,7 +28,6 @@ import {
 import BarcodeScanner from '../../components/BarcodeScanner';
 import EditItemModal from '../../components/EditItemModal';
 import AddProductModal from '../../components/AddProductModal';
-import { shareExcelReport } from '../../utils/excelExport';
 
 // Função para validar data no formato DD/MM/AAAA
 const isValidDate = (dateStr: string): boolean => {
@@ -260,38 +258,41 @@ export default function CountingScreen() {
     setSearchQuery(product.code);
   };
 
-  const handleExport = async () => {
+  const handleCloseInventory = async () => {
     if (items.length === 0) {
-      Alert.alert('Erro', 'Nenhum item para exportar');
+      Alert.alert('Erro', 'Adicione pelo menos um item antes de fechar o inventário');
       return;
     }
 
-    try {
-      setLoading(true);
-      
-      // Primeiro fechar o inventário
-      await closeInventory(inventoryId);
-      
-      // Obter dados para exportação
-      const exportData = await getExportData(inventoryId);
-      
-      // Compartilhar arquivo Excel (abre menu do sistema: WhatsApp, Email, etc.)
-      await shareExcelReport(exportData);
-      
-      // Mostra mensagem de sucesso
-      Alert.alert(
-        t('exportTitle'),
-        'Inventário encerrado com sucesso!',
-        [{ text: 'OK' }]
-      );
-      
-      loadData();
-    } catch (error) {
-      console.error('Error exporting:', error);
-      Alert.alert('Erro ao Exportar', (error as Error).message || t('exportError'));
-    } finally {
-      setLoading(false);
-    }
+    // Confirmação antes de fechar
+    Alert.alert(
+      'Fechar Inventário',
+      'Deseja realmente fechar este inventário? Após fechado, não será possível adicionar novos itens.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Fechar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await closeInventory(inventoryId);
+              
+              Alert.alert(
+                'Sucesso',
+                'Inventário fechado com sucesso! Você pode compartilhar o relatório na tela de Inventários.',
+                [{ text: 'OK', onPress: () => router.back() }]
+              );
+            } catch (error) {
+              console.error('Error closing inventory:', error);
+              Alert.alert('Erro', (error as Error).message || 'Falha ao fechar inventário');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderItem = ({ item }: { item: CountedItem }) => (
@@ -524,15 +525,15 @@ export default function CountingScreen() {
         {!isClosed && items.length > 0 && (
           <TouchableOpacity
             style={styles.exportButton}
-            onPress={handleExport}
+            onPress={handleCloseInventory}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
-                <Ionicons name="download" size={24} color="#FFFFFF" />
-                <Text style={styles.exportButtonText}>{t('exportAndClose')}</Text>
+                <Ionicons name="lock-closed" size={24} color="#FFFFFF" />
+                <Text style={styles.exportButtonText}>Fechar Inventário</Text>
               </>
             )}
           </TouchableOpacity>
