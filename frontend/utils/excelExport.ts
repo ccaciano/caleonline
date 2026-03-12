@@ -114,7 +114,8 @@ export const shareExcelReport = async (data: ExportData): Promise<void> => {
 
   // Escreve o arquivo como texto UTF-8 (sem precisar de base64!)
   await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-    encoding: FileSystem.EncodingType.UTF8,
+    // encoding: 'utf8',
+    encoding: 'utf8',
   });
 
   console.log('Arquivo criado, abrindo compartilhamento...');
@@ -139,7 +140,8 @@ export const generateExcelReport = async (data: ExportData): Promise<string> => 
   const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
   
   await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-    encoding: FileSystem.EncodingType.UTF8,
+    // encoding: 'utf8',
+    encoding: 'utf8',
   });
   
   return fileUri;
