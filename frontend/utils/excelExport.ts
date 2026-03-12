@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
@@ -11,81 +10,72 @@ const convertFromISO = (isoStr: string): string => {
   return `${day}/${month}/${year}`;
 };
 
-// Função auxiliar para criar o workbook
-const createWorkbook = (data: ExportData): XLSX.WorkBook => {
-  const wb = XLSX.utils.book_new();
-
-  // Prepare Store Info Data
-  const storeInfo = data.store ? [
-    ['CONFIGURAÇÃO DA LOJA'],
-    ['Código da Loja', data.store.store_id],
-    ['Nome da Loja', data.store.store_name],
-    ['E-mail', data.store.email],
-    ['Celular do Gerente', data.store.manager_phone],
-    ['Nome do Gerente', data.store.manager_name],
-    [],
-    ['INFORMAÇÕES DO INVENTÁRIO'],
-    ['Descrição', data.inventory.description],
-    ['Data', convertFromISO(data.inventory.date)],
-    ['Status', data.inventory.status === 'open' ? 'Aberto' : 'Fechado'],
-    ['Total de Itens', data.items.length.toString()],
-    [],
-  ] : [
-    ['INFORMAÇÕES DO INVENTÁRIO'],
-    ['Descrição', data.inventory.description],
-    ['Data', convertFromISO(data.inventory.date)],
-    ['Status', data.inventory.status === 'open' ? 'Aberto' : 'Fechado'],
-    ['Total de Itens', data.items.length.toString()],
-    [],
-  ];
-
-  // Prepare Items Data
-  const itemsHeader = [['Código do Produto', 'EAN', 'Descrição', 'Quantidade', 'Lote', 'Validade']];
-  const itemsData = data.items.map(item => [
-    item.product_code,
-    item.ean || '',
-    item.description || '',
-    item.quantity.toString(),
-    item.lot || '',
-    convertFromISO(item.expiry_date)
-  ]);
-
-  // Combine all data
-  const sheetData = [...storeInfo, ...itemsHeader, ...itemsData];
-
-  // Create worksheet
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-  // Set column widths
-  ws['!cols'] = [
-    { wch: 20 },
-    { wch: 15 },
-    { wch: 35 },
-    { wch: 12 },
-    { wch: 15 },
-    { wch: 12 },
-  ];
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Inventário');
-  return wb;
+// Função para escapar campos CSV (adiciona aspas se necessário)
+const escapeCSV = (value: string | number | undefined | null): string => {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  // Se contém vírgula, aspas ou quebra de linha, envolve em aspas
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
 };
 
 // Função para gerar nome do arquivo
 const generateFileName = (description: string): string => {
   const sanitizedDescription = description.replace(/[^a-zA-Z0-9]/g, '_');
   const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  return `inventario_${sanitizedDescription}_${timestamp}.xlsx`;
+  return `inventario_${sanitizedDescription}_${timestamp}.csv`;
+};
+
+// Criar conteúdo CSV
+const createCSVContent = (data: ExportData): string => {
+  const lines: string[] = [];
+  
+  // Header da loja (se existir)
+  if (data.store) {
+    lines.push('CONFIGURAÇÃO DA LOJA');
+    lines.push(`Código da Loja,${escapeCSV(data.store.store_id)}`);
+    lines.push(`Nome da Loja,${escapeCSV(data.store.store_name)}`);
+    lines.push(`E-mail,${escapeCSV(data.store.email)}`);
+    lines.push(`Celular do Gerente,${escapeCSV(data.store.manager_phone)}`);
+    lines.push(`Nome do Gerente,${escapeCSV(data.store.manager_name)}`);
+    lines.push('');
+  }
+  
+  // Info do inventário
+  lines.push('INFORMAÇÕES DO INVENTÁRIO');
+  lines.push(`Descrição,${escapeCSV(data.inventory.description)}`);
+  lines.push(`Data,${convertFromISO(data.inventory.date)}`);
+  lines.push(`Status,${data.inventory.status === 'open' ? 'Aberto' : 'Fechado'}`);
+  lines.push(`Total de Itens,${data.items.length}`);
+  lines.push('');
+  
+  // Header dos itens
+  lines.push('Código do Produto,EAN,Descrição,Quantidade,Lote,Validade');
+  
+  // Dados dos itens
+  for (const item of data.items) {
+    lines.push([
+      escapeCSV(item.product_code),
+      escapeCSV(item.ean),
+      escapeCSV(item.description),
+      escapeCSV(item.quantity),
+      escapeCSV(item.lot),
+      convertFromISO(item.expiry_date || ''),
+    ].join(','));
+  }
+  
+  // Adiciona BOM para UTF-8 (ajuda Excel a reconhecer acentos)
+  return '\uFEFF' + lines.join('\n');
 };
 
 // Download para Web
 const downloadForWeb = (data: ExportData): void => {
-  const wb = createWorkbook(data);
+  const csvContent = createCSVContent(data);
   const fileName = generateFileName(data.inventory.description);
-  const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   
-  const blob = new Blob([wbout], { 
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-  });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     const url = URL.createObjectURL(blob);
@@ -101,7 +91,7 @@ const downloadForWeb = (data: ExportData): void => {
   }
 };
 
-// Compartilhar arquivo no mobile (abre menu do sistema: WhatsApp, Email, etc.)
+// Compartilhar arquivo no mobile
 export const shareExcelReport = async (data: ExportData): Promise<void> => {
   if (Platform.OS === 'web') {
     downloadForWeb(data);
@@ -114,45 +104,42 @@ export const shareExcelReport = async (data: ExportData): Promise<void> => {
     throw new Error('Compartilhamento não disponível neste dispositivo');
   }
 
-  const wb = createWorkbook(data);
+  const csvContent = createCSVContent(data);
   const fileName = generateFileName(data.inventory.description);
-  
-  // Gera o arquivo como base64
-  const base64Content = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
 
-  // Usa o diretório de cache do app (sempre disponível)
-  const tempDir = `${FileSystem.cacheDirectory}`;
-  const fileUri = `${tempDir}${fileName}`;
+  // Usa o diretório de cache do app
+  const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
   
-  console.log('Criando arquivo temporário:', fileUri);
+  console.log('Criando arquivo CSV:', fileUri);
 
-  // Escreve o arquivo
-  await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-    encoding: FileSystem.EncodingType.Base64,
+  // Escreve o arquivo como texto UTF-8 (sem precisar de base64!)
+  await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+    encoding: FileSystem.EncodingType.UTF8,
   });
+
+  console.log('Arquivo criado, abrindo compartilhamento...');
 
   // Abre o menu de compartilhamento do sistema
   await Sharing.shareAsync(fileUri, {
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    mimeType: 'text/csv',
     dialogTitle: 'Compartilhar Relatório de Inventário',
-    UTI: 'org.openxmlformats.spreadsheetml.sheet',
+    UTI: 'public.comma-separated-values-text',
   });
 };
 
-// Manter funções antigas para compatibilidade (mas não serão mais usadas)
+// Funções de compatibilidade (não mais usadas, mas mantidas por segurança)
 export const generateExcelReport = async (data: ExportData): Promise<string> => {
   if (Platform.OS === 'web') {
     downloadForWeb(data);
     return 'web-download';
   }
   
-  const wb = createWorkbook(data);
+  const csvContent = createCSVContent(data);
   const fileName = generateFileName(data.inventory.description);
-  const base64Content = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
   const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
   
-  await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-    encoding: FileSystem.EncodingType.Base64,
+  await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+    encoding: FileSystem.EncodingType.UTF8,
   });
   
   return fileUri;
@@ -162,7 +149,7 @@ export const shareExcelFile = async (fileUri: string): Promise<void> => {
   if (Platform.OS === 'web' || fileUri === 'web-download') return;
   
   await Sharing.shareAsync(fileUri, {
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    mimeType: 'text/csv',
     dialogTitle: 'Compartilhar Relatório',
   });
 };
