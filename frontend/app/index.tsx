@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { getInventories, getExportData, deleteInventory, Inventory } from '../services/api';
 import Modal from 'react-native-modal';
 import CreateInventoryModal from '../components/CreateInventoryModal';
-import { generateExcelReport, shareExcelFile } from '../utils/excelExport';
+import { shareExcelReport } from '../utils/excelExport';
 
 // Função para converter AAAA-MM-DD para DD/MM/AAAA
 const convertFromISO = (isoStr: string): string => {
@@ -75,22 +75,14 @@ export default function InventoriesScreen() {
     
     try {
       setExportingId(inventory._id);
-      console.log('Iniciando download do inventário:', inventory._id);
-      
       const exportData = await getExportData(inventory._id);
-      console.log('Dados de exportação obtidos:', exportData ? 'OK' : 'ERRO');
       
-      const fileUri = await generateExcelReport(exportData);
-      console.log('Arquivo gerado:', fileUri);
+      // Abre o menu de compartilhamento diretamente (WhatsApp, Email, etc.)
+      await shareExcelReport(exportData);
       
-      if (Platform.OS !== 'web' && fileUri !== 'web-download') {
-        await shareExcelFile(fileUri);
-      }
-      
-      Alert.alert('Sucesso', 'Relatório exportado com sucesso!');
     } catch (error: any) {
-      console.error('Error downloading report:', error);
-      Alert.alert('Erro', error.message || 'Falha ao baixar relatório');
+      console.error('Error sharing report:', error);
+      Alert.alert('Erro', error.message || 'Falha ao compartilhar relatório');
     } finally {
       setExportingId(null);
     }
@@ -215,8 +207,8 @@ export default function InventoriesScreen() {
                 <ActivityIndicator size="small" color="#007AFF" />
               ) : (
                 <>
-                  <Ionicons name="download-outline" size={20} color="#007AFF" />
-                  <Text style={styles.downloadButtonText}>Baixar Excel</Text>
+                  <Ionicons name="share-outline" size={20} color="#007AFF" />
+                  <Text style={styles.downloadButtonText}>Compartilhar</Text>
                 </>
               )}
             </TouchableOpacity>

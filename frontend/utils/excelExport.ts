@@ -58,15 +58,15 @@ const createWorkbook = (data: ExportData): XLSX.WorkBook => {
 
   // Set column widths
   ws['!cols'] = [
-    { wch: 20 }, // Código do Produto
-    { wch: 15 }, // EAN
-    { wch: 35 }, // Descrição
-    { wch: 12 }, // Quantidade
-    { wch: 15 }, // Lote
-    { wch: 12 }, // Validade
+    { wch: 20 },
+    { wch: 15 },
+    { wch: 35 },
+    { wch: 12 },
+    { wch: 15 },
+    { wch: 12 },
   ];
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Relatório de Inventário');
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventário');
   return wb;
 };
 
@@ -77,171 +77,92 @@ const generateFileName = (description: string): string => {
   return `inventario_${sanitizedDescription}_${timestamp}.xlsx`;
 };
 
-// Download para Web usando Blob
+// Download para Web
 const downloadForWeb = (data: ExportData): void => {
   const wb = createWorkbook(data);
   const fileName = generateFileName(data.inventory.description);
-  
-  // Gera o arquivo como array buffer
   const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   
-  // Cria um Blob
   const blob = new Blob([wbout], { 
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
   });
   
-  if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.body) {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
-    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    
     setTimeout(() => {
-      if (link.parentNode) {
-        document.body.removeChild(link);
-      }
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     }, 100);
   }
 };
 
-// Função para obter um diretório válido
-const getAvailableDirectory = async (): Promise<string> => {
-  // Lista de diretórios para tentar em ordem de preferência
-  const directories = [
-    FileSystem.cacheDirectory,
-    FileSystem.documentDirectory,
-  ];
-
-  console.log('Verificando diretórios disponíveis:', {
-    cacheDirectory: FileSystem.cacheDirectory,
-    documentDirectory: FileSystem.documentDirectory,
-  });
-
-  for (const dir of directories) {
-    if (dir) {
-      try {
-        // Verifica se o diretório está acessível tentando obter info
-        const info = await FileSystem.getInfoAsync(dir);
-        console.log(`Diretório ${dir} info:`, info);
-        if (info.exists || info.isDirectory !== false) {
-          return dir;
-        }
-      } catch (e) {
-        console.log(`Erro ao verificar diretório ${dir}:`, e);
-      }
-    }
+// Compartilhar arquivo no mobile (abre menu do sistema: WhatsApp, Email, etc.)
+export const shareExcelReport = async (data: ExportData): Promise<void> => {
+  if (Platform.OS === 'web') {
+    downloadForWeb(data);
+    return;
   }
 
-  // Se nenhum diretório está disponível, tentar criar no documentDirectory
-  const fallbackDir = FileSystem.documentDirectory || 'file:///data/user/0/com.emergent.inventorymanager/files/';
-  console.log('Usando diretório fallback:', fallbackDir);
-  return fallbackDir;
-};
+  // Verificar se o compartilhamento está disponível
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error('Compartilhamento não disponível neste dispositivo');
+  }
 
-// Download para dispositivos nativos
-const downloadForNative = async (data: ExportData): Promise<string> => {
   const wb = createWorkbook(data);
   const fileName = generateFileName(data.inventory.description);
   
-  // Gera base64 string
+  // Gera o arquivo como base64
   const base64Content = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
 
-  // Obtém um diretório válido
-  const baseDir = await getAvailableDirectory();
-  const fileUri = baseDir + fileName;
+  // Usa o diretório de cache do app (sempre disponível)
+  const tempDir = `${FileSystem.cacheDirectory}`;
+  const fileUri = `${tempDir}${fileName}`;
   
-  console.log('Salvando arquivo em:', fileUri);
-  console.log('Tamanho do conteúdo base64:', base64Content.length);
+  console.log('Criando arquivo temporário:', fileUri);
 
-  try {
-    // Escreve o arquivo
-    await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+  // Escreve o arquivo
+  await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
 
-    // Verifica se o arquivo foi criado
-    const fileInfo = await FileSystem.getInfoAsync(fileUri);
-    console.log('Info do arquivo criado:', fileInfo);
-    
-    if (!fileInfo.exists) {
-      throw new Error('Arquivo não foi criado');
-    }
-
-    return fileUri;
-  } catch (writeError: any) {
-    console.error('Erro ao escrever arquivo:', writeError);
-    
-    // Tenta uma abordagem alternativa usando o SAF
-    try {
-      console.log('Tentando abordagem alternativa com SAF...');
-      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-      
-      if (permissions.granted) {
-        const safUri = await FileSystem.StorageAccessFramework.createFileAsync(
-          permissions.directoryUri,
-          fileName,
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        );
-        
-        await FileSystem.writeAsStringAsync(safUri, base64Content, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        
-        return safUri;
-      }
-    } catch (safError) {
-      console.error('Erro SAF:', safError);
-    }
-    
-    throw new Error('Não foi possível salvar o arquivo. Verifique as permissões do aplicativo.');
-  }
+  // Abre o menu de compartilhamento do sistema
+  await Sharing.shareAsync(fileUri, {
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    dialogTitle: 'Compartilhar Relatório de Inventário',
+    UTI: 'org.openxmlformats.spreadsheetml.sheet',
+  });
 };
 
+// Manter funções antigas para compatibilidade (mas não serão mais usadas)
 export const generateExcelReport = async (data: ExportData): Promise<string> => {
-  try {
-    console.log('Iniciando geração do relatório Excel...');
-    console.log('Plataforma:', Platform.OS);
-    
-    if (Platform.OS === 'web') {
-      downloadForWeb(data);
-      return 'web-download';
-    } else {
-      return await downloadForNative(data);
-    }
-  } catch (error) {
-    console.error('Error generating Excel report:', error);
-    throw error;
+  if (Platform.OS === 'web') {
+    downloadForWeb(data);
+    return 'web-download';
   }
+  
+  const wb = createWorkbook(data);
+  const fileName = generateFileName(data.inventory.description);
+  const base64Content = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+  const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+  
+  await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  
+  return fileUri;
 };
 
 export const shareExcelFile = async (fileUri: string): Promise<void> => {
-  try {
-    console.log('Iniciando compartilhamento do arquivo:', fileUri);
-    
-    // Na web, o download já foi feito automaticamente
-    if (Platform.OS === 'web' || fileUri === 'web-download') {
-      return;
-    }
-    
-    // Verifica se o compartilhamento está disponível
-    const canShare = await Sharing.isAvailableAsync();
-    console.log('Compartilhamento disponível:', canShare);
-    
-    if (canShare) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        dialogTitle: 'Salvar Relatório de Inventário',
-        UTI: 'org.openxmlformats.spreadsheetml.sheet',
-      });
-    } else {
-      throw new Error('Compartilhamento não disponível neste dispositivo');
-    }
-  } catch (error) {
-    console.error('Error sharing file:', error);
-    throw error;
-  }
+  if (Platform.OS === 'web' || fileUri === 'web-download') return;
+  
+  await Sharing.shareAsync(fileUri, {
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    dialogTitle: 'Compartilhar Relatório',
+  });
 };

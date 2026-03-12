@@ -29,7 +29,7 @@ import {
 import BarcodeScanner from '../../components/BarcodeScanner';
 import EditItemModal from '../../components/EditItemModal';
 import AddProductModal from '../../components/AddProductModal';
-import { generateExcelReport, shareExcelFile } from '../../utils/excelExport';
+import { shareExcelReport } from '../../utils/excelExport';
 
 // Função para validar data no formato DD/MM/AAAA
 const isValidDate = (dateStr: string): boolean => {
@@ -270,37 +270,20 @@ export default function CountingScreen() {
       setLoading(true);
       
       // Primeiro fechar o inventário
-      console.log('Fechando inventário...');
       await closeInventory(inventoryId);
       
       // Obter dados para exportação
-      console.log('Obtendo dados para exportação...');
       const exportData = await getExportData(inventoryId);
       
-      // Gerar arquivo Excel
-      console.log('Gerando arquivo Excel...');
-      const fileUri = await generateExcelReport(exportData);
-      console.log('Arquivo gerado:', fileUri);
+      // Compartilhar arquivo Excel (abre menu do sistema: WhatsApp, Email, etc.)
+      await shareExcelReport(exportData);
       
-      if (Platform.OS === 'web' || fileUri === 'web-download') {
-        // Na web, o download já foi feito automaticamente
-        Alert.alert(
-          t('exportTitle'),
-          'Inventário encerrado e arquivo Excel baixado com sucesso!',
-          [{ text: 'OK' }]
-        );
-      } else {
-        // No mobile, abre automaticamente o menu de compartilhamento
-        // O usuário pode escolher salvar em arquivos, enviar por email, WhatsApp, etc.
-        await shareExcelFile(fileUri);
-        
-        // Mostra mensagem de sucesso após compartilhar
-        Alert.alert(
-          t('exportTitle'),
-          'Inventário encerrado com sucesso!',
-          [{ text: 'OK' }]
-        );
-      }
+      // Mostra mensagem de sucesso
+      Alert.alert(
+        t('exportTitle'),
+        'Inventário encerrado com sucesso!',
+        [{ text: 'OK' }]
+      );
       
       loadData();
     } catch (error) {
